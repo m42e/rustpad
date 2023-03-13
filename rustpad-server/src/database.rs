@@ -88,4 +88,11 @@ ON CONFLICT(id) DO UPDATE SET
             .await?;
         Ok(row.0 > 0)
     }
+    /// Delete document from database
+    pub async fn delete(&self, document_id: &str) {
+        let result = sqlx::query(r#"DELETE FROM document WHERE id = $1"#)
+            .bind(document_id)
+            .execute(&self.pool)
+            .await;
+    }
 }

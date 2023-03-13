@@ -6,7 +6,6 @@
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use rand::distributions::Alphanumeric;
-use bytes::Bytes;
 
 use dashmap::DashMap;
 use log::{error, info};
@@ -128,6 +127,12 @@ fn backend(config: ServerConfig) -> BoxedFilter<(impl Reply,)> {
         .and(state_filter.clone())
         .and_then(text_post_handler);
 
+    let delete_text=
+        warp::delete()
+        .and(warp::path!("delete" / String))
+        .and(state_filter.clone())
+        .and_then(text_delete_handler);
+
     let start_time = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .expect("SystemTime returned before UNIX_EPOCH")
@@ -138,7 +143,7 @@ fn backend(config: ServerConfig) -> BoxedFilter<(impl Reply,)> {
         .and(state_filter)
         .and_then(stats_handler);
 
-    socket.or(text_post).or(text).or(stats).boxed()
+    socket.or(text_post).or(delete_text).or(text).or(stats).boxed()
 }
 
 /// Handler for the `/api/socket/{id}` endpoint.
@@ -182,7 +187,7 @@ async fn text_handler(id: String, state: ServerState) -> Result<impl Reply, Reje
     })
 }
 
-/// Handler for the `/api/text/{id}` endpoint.
+/// Handler for the `/api/create/{filetype}` endpoint.
 async fn text_post_handler(language: String, bytes: bytes::Bytes, state: ServerState) -> Result<impl Reply, Rejection> {
     let mut retry = true;
     let mut id:String = "".to_string();
@@ -216,6 +221,17 @@ async fn text_post_handler(language: String, bytes: bytes::Bytes, state: ServerS
     }
     Ok(id)
 }
+
+
+/// Handler for the `/api/create/{filetype}` endpoint.
+async fn text_delete_handler(id: String, state: ServerState) -> Result<impl Reply, Rejection> {
+    state.documents.remove(&id);
+    if let Some(db) = &state.database {
+        db.delete(&id).await;
+    }
+    Ok(id)
+}
+
 
 /// Handler for the `/api/stats` endpoint.
 async fn stats_handler(start_time: u64, state: ServerState) -> Result<impl Reply, Rejection> {
